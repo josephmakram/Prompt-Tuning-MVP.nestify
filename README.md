@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 # Speech-to-Task Prompt-Tuning MVP
 
 An MVP demonstration of prompt optimization for converting family speech commands into executable tasks using DSPy framework. Built entirely offline with simulated data and models.
@@ -277,3 +278,6 @@ Created as an MVP demonstration of prompt optimization techniques using DSPy.
 ---
 
 **Ready to optimize prompts?** Run `python run_demo.py` to get started!
+=======
+# Prompt-Tuning-MVP.nestify
+>>>>>>> bfe18d2ff07e37dbb373ca21cf016a92614832a0
