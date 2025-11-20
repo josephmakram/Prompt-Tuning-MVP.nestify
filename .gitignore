@@ -49,3 +49,4 @@ data/*.json
 .ipynb_checkpoints/
 *.ipynb
 .nvm
+.nvm
