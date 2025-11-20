@@ -137,26 +137,38 @@ class FamilySpeechDataGenerator:
                     "Add {event} to calendar for {time}",
                     "Schedule {event} at {time}",
                     "Put {event} on the calendar {time}",
+                    "What's on my calendar {time}",
+                    "Do I have anything scheduled for {time}",
                 ],
-                "intents": ["add_calendar_event"],
+                "child": [
+                    "What's on the calendar",
+                    "Do I have anything today",
+                ],
+                "intents": ["add_calendar_event", "get_calendar"],
                 "params": {
                     "event": ["dentist appointment", "soccer practice", "parent teacher meeting",
                              "birthday party", "doctor visit"],
-                    "time": ["tomorrow at 3pm", "Friday morning", "next week", "this weekend"]
+                    "time": ["tomorrow at 3pm", "Friday morning", "next week", "this weekend", "today", "tonight"]
                 },
                 "priority": "high"
             },
             "help": {
+                "parent": [
+                    "How do I {task}",
+                    "Can you help with {subject}",
+                ],
                 "child": [
                     "Help with {subject} homework",
                     "I need help with {subject}",
                     "Can you help me with {subject}",
                     "What's {question}",
+                    "Explain {subject} to me",
                 ],
                 "intents": ["request_help"],
                 "params": {
-                    "subject": ["math", "reading", "science", "spelling"],
-                    "question": ["5 times 7", "how to spell beautiful", "the capital of France"]
+                    "subject": ["math", "reading", "science", "spelling", "fractions", "multiplication", "reading assignment", "science project", "spelling words"],
+                    "question": ["5 times 7", "how to spell beautiful", "the capital of France"],
+                    "task": ["set up parental controls", "fix the WiFi"]
                 },
                 "priority": "medium"
             },

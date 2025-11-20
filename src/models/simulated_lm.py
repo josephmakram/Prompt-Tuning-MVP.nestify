@@ -6,6 +6,7 @@ This mock LM allows testing DSPy without external API calls.
 import re
 import json
 from typing import List, Dict, Any, Optional
+import dspy
 
 
 class SimulatedLM:
@@ -51,44 +52,69 @@ class SimulatedLM:
     def __call__(self, prompt: str, **kwargs) -> List[str]:
         """
         Simulate LM call.
-        
+
         Args:
             prompt: Input prompt
             **kwargs: Additional arguments (ignored for simulation)
-        
+
         Returns:
             List containing single response string
         """
         self.call_count += 1
-        
+
         # Extract the actual query from the prompt
         query = self._extract_query(prompt)
-        
+
         # Determine task type based on prompt content
-        if "extract intent" in prompt.lower() or "identify" in prompt.lower():
+        prompt_lower = prompt.lower()
+
+        # Check for DSPy signature patterns
+        if "task_json" in prompt_lower and "confidence" in prompt_lower:
+            # This is a direct speech-to-task request
+            response = self._simulate_task_generation(query, prompt)
+        elif "extract intent" in prompt_lower or ("intent" in prompt_lower and "confidence" in prompt_lower):
+            # This is an intent extraction request
             response = self._simulate_intent_extraction(query, prompt)
-        elif "convert" in prompt.lower() or "task" in prompt.lower() or "json" in prompt.lower():
+        elif "convert" in prompt_lower or "task" in prompt_lower:
+            # This is a task generation from intent
             response = self._simulate_task_generation(query, prompt)
         else:
             response = self._simulate_general_response(query)
-        
+
         return [response]
     
     def _extract_query(self, prompt: str) -> str:
         """Extract the actual query/command from the prompt."""
         # Look for common patterns in DSPy prompts
         lines = prompt.split('\n')
+
+        # Try to find speech_input field
         for line in lines:
             if 'speech_input:' in line.lower():
-                return line.split(':', 1)[1].strip()
+                parts = line.split(':', 1)
+                if len(parts) > 1:
+                    return parts[1].strip()
             elif 'command:' in line.lower():
-                return line.split(':', 1)[1].strip()
-        
-        # If no pattern found, return last non-empty line
-        for line in reversed(lines):
-            if line.strip():
-                return line.strip()
-        
+                parts = line.split(':', 1)
+                if len(parts) > 1:
+                    return parts[1].strip()
+
+        # Look for fields in DSPy format (e.g., "[[ ## speech_input ## ]]")
+        import re
+        match = re.search(r'\[\[\s*##\s*speech_input\s*##\s*\]\]\s*\n\s*([^\n\[]+)', prompt, re.IGNORECASE)
+        if match:
+            return match.group(1).strip()
+
+        # If no pattern found, return last non-empty line before "---" or empty line
+        significant_lines = []
+        for line in lines:
+            stripped = line.strip()
+            if stripped and not stripped.startswith('---') and not stripped.startswith('##'):
+                significant_lines.append(stripped)
+
+        if significant_lines:
+            return significant_lines[-1]
+
         return prompt
     
     def _simulate_intent_extraction(self, query: str, full_prompt: str) -> str:
@@ -123,14 +149,14 @@ class SimulatedLM:
     def _simulate_task_generation(self, query: str, full_prompt: str) -> str:
         """Simulate task JSON generation from intent and speech."""
         query_lower = query.lower()
-        
+
         # Detect intent
         intent = "unknown"
         for intent_name, pattern in self.intent_patterns.items():
             if re.search(pattern, query_lower):
                 intent = intent_name
                 break
-        
+
         # Extract parameters
         parameters = {}
         for param_name, pattern in self.param_patterns.items():
@@ -139,21 +165,42 @@ class SimulatedLM:
                 # Get the first non-None group
                 value = next((g for g in match.groups() if g), match.group(1) if match.lastindex else match.group(0))
                 parameters[param_name] = value.strip()
-        
+
         # Determine priority
         priority = "medium"
         if "urgent" in query_lower or "now" in query_lower:
             priority = "high"
         elif "when you can" in query_lower or "maybe" in query_lower:
             priority = "low"
-        
+
         task = {
             "action": intent,
             "parameters": parameters,
             "priority": priority
         }
-        
-        return json.dumps(task, indent=2)
+
+        task_json_str = json.dumps(task)
+
+        # Check if the prompt is asking for JSON format with multiple fields (DSPy JSONAdapter)
+        if "json" in full_prompt.lower() and ("task_json" in full_prompt.lower() or "confidence" in full_prompt.lower()):
+            # Return in DSPy JSONAdapter expected format - a single JSON object with all fields
+            import random
+            confidence = round(0.85 + random.random() * 0.1, 2)  # Random confidence between 0.85 and 0.95
+
+            response_obj = {
+                "task_json": task_json_str,
+                "confidence": confidence
+            }
+
+            # Check if reasoning is requested (ChainOfThought)
+            if "reasoning" in full_prompt.lower():
+                reasoning = f"Detected intent '{intent}' from the speech command. Extracted parameters and determined priority as '{priority}'."
+                response_obj = {"reasoning": reasoning, **response_obj}
+
+            return json.dumps(response_obj, indent=2)
+        else:
+            # Return just the task JSON
+            return json.dumps(task, indent=2)
     
     def _simulate_general_response(self, query: str) -> str:
         """Simulate a general response."""
@@ -168,28 +215,34 @@ class SimulatedLM:
         return self.call_count
 
 
-class DummyLM:
+class DummyLM(dspy.BaseLM):
     """
     Dummy LM for DSPy compatibility.
     Wraps SimulatedLM to match DSPy's expected interface.
     """
-    
+
     def __init__(self, model: str = "simulated", **kwargs):
         """Initialize dummy LM."""
-        self.model = model
+        super().__init__(model=model)
         self.kwargs = kwargs
         self.history = []
         self.sim_lm = SimulatedLM()
-    
+        self.provider = "simulated"
+
     def __call__(self, prompt: str = None, messages: List = None, **kwargs):
         """Call the LM."""
         if messages:
             prompt = messages[-1].get("content", "") if isinstance(messages[-1], dict) else str(messages[-1])
-        
+
         response = self.sim_lm(prompt, **kwargs)
         self.history.append({"prompt": prompt, "response": response})
         return response
-    
+
+    def basic_request(self, prompt: str, **kwargs):
+        """Basic request method required by DSPy."""
+        response_text = self.sim_lm(prompt, **kwargs)[0]
+        return {"choices": [{"text": response_text}]}
+
     def inspect_history(self, n: int = 1):
         """Inspect recent history."""
         return self.history[-n:] if self.history else []
