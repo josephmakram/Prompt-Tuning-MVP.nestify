@@ -279,9 +279,3 @@ Created as an MVP demonstration of prompt optimization techniques using DSPy.
 
 **Ready to optimize prompts?** Run `python run_demo.py` to get started!
 =======
-# Prompt-Tuning-MVP.nestify
->>>>>>> bfe18d2ff07e37dbb373ca21cf016a92614832a0
-# Prompt-Tuning.mvp
-# Prompt-Tuning.mvp
-# Prompt-Tuning.mvp
-# Prompt-Tuning.mvp
